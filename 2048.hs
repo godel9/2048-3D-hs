@@ -47,10 +47,10 @@ getDx Bottom = (0,0,-1)
 getDx Top = (0,0,1)
 
 apply :: (Int,Int,Int) -> Move -> Maybe (Int,Int,Int)
-apply ps move = let ds = getDx move in
-	let r = add (listify ds) (listify ps) in
-	case and $ map inBounds r of
-		True -> Just $ tuplify r
+apply (x,y,z) move = let (x2,y2,z2) = getDx move in
+	let r = (x+x2,y+y2,z+z2) in
+	case all inBounds [x+x2,y+y2,z+z2] of
+		True -> Just r
 		False -> Nothing
 	where
 	listify :: (Int,Int,Int) -> [Int]
@@ -177,7 +177,8 @@ isValidMove :: Board -> Move -> Bool
 isValidMove board move = (makeMoveNoSeed board move) /= board
 
 moveList :: Board -> [Move]
-moveList board = filter (isValidMove board) [Up,Down,Lft,Rght,Bottom,Top]
+moveList board | any (\x-> (val x) == 2048) (map (getTile board) enumBoard) = []
+	| otherwise = filter (isValidMove board) [Up,Down,Lft,Rght,Bottom,Top]
 
 makeMoveNoSeed :: Board -> Move -> Board
 makeMoveNoSeed board move = resetBoard $ foldl helper board (moveEnum move)
@@ -213,15 +214,32 @@ type Algorithm = Board -> Heuristic -> Int -> IO Move
 
 
 minimax :: Board -> Int -> Bool -> Heuristic -> Float
-minimax board depth _ h | depth == 0 || moveList board == [] = h board
+minimax board depth _ h | depth == 0 || gameOver board = h board
 minimax board depth True h = maximum . ([-1.0/0.0]++) $ map (\x -> minimax (makeMoveNoSeed board x) (depth-1) False h) (moveList board)
 minimax board depth False h = sum $ map (\r@(RandomMove x _) -> (*x) $ minimax (applyRandomMove board r) (depth-1) True h) (seedOpts board) 
+
+alphaBeta :: Board -> Int -> Bool -> Float -> Float -> Heuristic -> Float
+alphaBeta board depth _ _ _ h | depth == 0 || gameOver board = h board
+alphaBeta board depth True a b h = helper a  $ map (makeMoveNoSeed board) (moveList board)
+	where
+	helper :: Float -> [Board] -> Float
+	helper a' [] = a'
+	helper a' (x:xs) = let y = alphaBeta x (depth-1) False a' b h in if b <= a' then a' else helper (max a' y) xs
+alphaBeta board depth False a b h = helper b $ map (makeMoveNoSeed board) (moveList board)
+	where
+	helper :: Float -> [Board] -> Float
+	helper b' [] = b'
+	helper b' (x:xs) = let y = alphaBeta x (depth-1) True a b' h in if b' <= a then a else helper (min b' y) xs
 
 h1 :: Heuristic
 h1 = fromIntegral . score
 
-minimaxPlayer :: Player
-minimaxPlayer = Player { getMove = \board -> do {putStrLn (show board); return $ argmax (\x -> minimax (makeMoveNoSeed board x) 2 True h1) (moveList board) } }
+minimaxPlayer :: Int -> Player
+minimaxPlayer n = Player { getMove = \board -> do {putStrLn (show board); return $ argmax (\x -> minimax (makeMoveNoSeed board x) n True h1) (moveList board) } }
+
+alphaBetaPlayer :: Int -> Player
+alphaBetaPlayer n = Player { getMove = \board -> do {putStrLn (show board); return $ argmax (\x -> alphaBeta (makeMoveNoSeed board x) n True (-1.0/0.0) (1.0/0.0) h1) (moveList board) } }
+
 
 
 runGame :: Player -> IO ()
@@ -236,7 +254,7 @@ runGame player = seed newBoard >>= step player
 		step player board'
 
 main :: IO ()
-main = runGame minimaxPlayer
+main = runGame $ alphaBetaPlayer 4
 
 
 
