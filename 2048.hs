@@ -180,6 +180,10 @@ moveList :: Board -> [Move]
 moveList board | any (\x-> (val x) == 2048) (map (getTile board) enumBoard) = []
 	| otherwise = filter (isValidMove board) [Up,Down,Lft,Rght,Bottom,Top]
 
+moveList' :: Board -> [(Board,Move)]
+moveList' board | any ((==2048) . val) $ map (getTile board) enumBoard = []
+	| otherwise = filter (\(x,y) -> x /= board) $ map (\x -> (makeMoveNoSeed board x,x)) [Up,Down,Lft,Rght,Bottom,Top]
+
 makeMoveNoSeed :: Board -> Move -> Board
 makeMoveNoSeed board move = resetBoard $ foldl helper board (moveEnum move)
 	where
@@ -220,12 +224,12 @@ minimax board depth False h = sum $ map (\r@(RandomMove x _) -> (*x) $ minimax (
 
 alphaBeta :: Board -> Int -> Bool -> Float -> Float -> Heuristic -> Float
 alphaBeta board depth _ _ _ h | depth == 0 || gameOver board = h board
-alphaBeta board depth True a b h = helper a  $ map (makeMoveNoSeed board) (moveList board)
+alphaBeta board depth True a b h = helper a  $ map (\(x,_) -> x) (moveList' board)
 	where
 	helper :: Float -> [Board] -> Float
 	helper a' [] = a'
 	helper a' (x:xs) = let y = alphaBeta x (depth-1) False a' b h in if b <= a' then a' else helper (max a' y) xs
-alphaBeta board depth False a b h = helper b $ map (makeMoveNoSeed board) (moveList board)
+alphaBeta board depth False a b h = helper b $ map (\(x,_) -> x) (moveList' board)
 	where
 	helper :: Float -> [Board] -> Float
 	helper b' [] = b'
@@ -238,7 +242,7 @@ minimaxPlayer :: Int -> Player
 minimaxPlayer n = Player { getMove = \board -> do {putStrLn (show board); return $ argmax (\x -> minimax (makeMoveNoSeed board x) n True h1) (moveList board) } }
 
 alphaBetaPlayer :: Int -> Player
-alphaBetaPlayer n = Player { getMove = \board -> do {putStrLn (show board); return $ argmax (\x -> alphaBeta (makeMoveNoSeed board x) n True (-1.0/0.0) (1.0/0.0) h1) (moveList board) } }
+alphaBetaPlayer n = Player { getMove = \board -> do {return $ argmax (\x -> alphaBeta (makeMoveNoSeed board x) n True (-1.0/0.0) (1.0/0.0) h1) (moveList board) } }
 
 
 
@@ -250,11 +254,10 @@ runGame player = seed newBoard >>= step player
 	step player board | otherwise = do
 		move <- (getMove player) board
 		board' <- makeMove board move
-		putStrLn (show move)
 		step player board'
 
 main :: IO ()
-main = runGame $ alphaBetaPlayer 4
+main = runGame $ alphaBetaPlayer 2
 
 
 
