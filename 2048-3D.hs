@@ -1,8 +1,6 @@
 --import Data.Array
 import Data.Array.IArray
 import System.Random
-import Data.Ord
-import Data.List
 
 argmax                :: (Ord b) => (a -> b) -> [a] -> a
 argmax f (x:xs) = _argmaxBy (>) f xs (x, f x)
@@ -18,8 +16,7 @@ _argmaxBy isBetterThan f = go
                    then (a,fa)
                    else (b,fb)
 
-safeLog :: Float -> Float
-safeLog x = if x==0.0 then 0 else log x
+
 
 
 
@@ -40,24 +37,24 @@ instance Show Tile where
 	show t | val t == 0 = "----"
 	show t = show $ val t
 
-data Move = Up | Down | Lft | Rght
+data Move = Up | Down | Lft | Rght | Top | Bottom
 	deriving (Show,Enum,Eq,Read)
-getDx :: Move -> Position
-getDx Lft = (0,-1)
-getDx Rght = (0,1)
-getDx Up = (-1,0)
-getDx Down = (1,0)
+getDx :: Move -> (Int,Int,Int)
+getDx Lft = (0,-1,0)
+getDx Rght = (0,1,0)
+getDx Up = (-1,0,0)
+getDx Down = (1,0,0)
+getDx Bottom = (0,0,-1)
+getDx Top = (0,0,1)
 
-type Position = (Int,Int)
-
-apply :: Position -> Move -> Maybe Position
-apply (x,y) move = let (x2,y2) = getDx move in
-	case x+x2<4 && x+x2>=0 && y+y2<4 && y+y2>=0 of
-		True -> Just (x+x2,y+y2)
+apply :: (Int,Int,Int) -> Move -> Maybe (Int,Int,Int)
+apply (x,y,z) move = let (x2,y2,z2) = getDx move in
+	case x+x2<3 && x+x2>=0 && y+y2<3 && y+y2>=0 && z+z2<3 && z+z2>=0 of
+		True -> Just (x+x2,y+y2,z+z2)
 		False -> Nothing
 
 data Board = Board {
-	arr :: (Array Position Tile),
+	arr :: (Array (Int,Int,Int) Tile),
 	score :: Int
 	}
 	deriving (Eq)
@@ -66,11 +63,11 @@ gameOver :: Board -> Bool
 gameOver board = (moveList board) == [] || any (\x-> (val x) == 2048) (map (getTile board) enumBoard)
 
 
-showArr :: Array Position Tile -> String
+showArr :: Array (Int,Int,Int) Tile -> String
 showArr arr = helper $ map (pad . show . (arr !)) enumBoard --foldl (flip $ (++) . show . (arr !)) "" enumBoard 
 	where
 	helper :: [String] -> String
-	helper (a:b:c:d:xs) = a ++ b ++ c ++ d ++ "\n" ++ helper xs
+	helper (a:b:c:d:e:f:g:h:i:xs) = a ++ b ++ c ++ "\t" ++ d ++ e ++ f ++ "\t" ++ g ++ h ++ i ++ "\n" ++ helper xs
 	helper _ = ""
 
 instance Show Board where
@@ -79,78 +76,94 @@ instance Show Board where
 incScore :: Int -> Board -> Board
 incScore n board = Board {arr = arr board, score = (+n) (score board)}
 
-getTile :: Board -> Position -> Tile
+getTile :: Board -> (Int,Int,Int) -> Tile
 getTile board ps = (arr board) ! ps
 
-setTile :: Board -> Position -> Tile -> Board
+setTile :: Board -> (Int,Int,Int) -> Tile -> Board
 setTile board ps tile = Board { arr = (arr board) // [(ps,tile)], score = score board}
 
-setTiles :: Board -> [(Position,Tile)] -> Board
+setTiles :: Board -> [((Int,Int,Int),Tile)] -> Board
 setTiles board xs = Board {arr = (arr board) // xs, score = score board}
 
-incScoreAndSetTiles :: Board -> Int -> [(Position,Tile)] -> Board
+incScoreAndSetTiles :: Board -> Int -> [((Int,Int,Int),Tile)] -> Board
 incScoreAndSetTiles board n xs = Board {arr = (arr board) // xs, score = (score board) + n}
 
-moveTile :: Board -> Position -> Position -> Board
+moveTile :: Board -> (Int,Int,Int) -> (Int,Int,Int) -> Board
 moveTile board p1 p2 | p1 == p2 =  board
 	|otherwise = setTiles board [(p2, getTile board p1), (p1,blank)] --setTile (setTile board p2 (getTile board p1)) p1 blank
 
 resetTile :: Tile -> Tile
 resetTile (Tile v _) = Tile v False
 
-enumBoard :: [Position]
-enumBoard = [(i,j) | i<-[0..3], j<-[0..3]]
+enumBoard :: [(Int,Int,Int)]
+enumBoard = [(i,j,k) | i<-[0..2], k<-[2,1,0], j<-[0..2]]
 
-rowsAndCols :: [[Position]]
-rowsAndCols = [[(i,j) | i<-[0..3]] | j<-[0..3]] ++ [[(i,j) | j<-[0..3]] | i<-[0..3]]
-
-moveEnum :: Move -> [Position]
-moveEnum Up = [(i,j) | i<-[0..3], j<-[0..3]]
-moveEnum Down = [(i,j) | i<-[3,2,1,0], j<-[0..3]]
-moveEnum Lft = [(i,j) | i<-[0..3], j<-[0..3]]
-moveEnum Rght = [(i,j) | i<-[0..3], j<-[3,2,1,0]]
+moveEnum :: Move -> [(Int,Int,Int)]
+moveEnum Up = [(i,j,k) | i<-[0..2], k<-[0..2], j<-[0..2]]
+moveEnum Down = [(i,j,k) | i<-[2,1,0], k<-[0..2], j<-[0..2]]
+moveEnum Lft = [(i,j,k) | i<-[0..2], k<-[0..2], j<-[0..2]]
+moveEnum Rght = [(i,j,k) | i<-[0..2], k<-[0..2], j<-[2,1,0]]
+moveEnum Top = [(i,j,k) | i<-[0..2], k<-[2,1,0], j<-[0..2]]
+moveEnum Bottom = [(i,j,k) | i<-[0..2], k<-[0..2], j<-[0..2]]
 
 
 resetBoard :: Board -> Board
 resetBoard board = Board { arr = amap resetTile (arr board), score = score board}
 
-blanks :: Board -> [Position]
+blanks :: Board -> [(Int,Int,Int)]
 blanks board = filter (helper board) enumBoard
 	where
-	helper :: Board -> Position -> Bool
+	helper :: Board -> (Int,Int,Int) -> Bool
 	helper board ps = case getTile board ps of
 		(Tile 0 _) -> True
 		_ -> False
 
 newBoard :: Board
-newBoard = Board { arr = array ((0,0),(3,3)) (map (\x -> (x,blank)) enumBoard), score = 0}
+newBoard = Board { arr = array ((0,0,0),(2,2,2)) (map (\x -> (x,blank)) enumBoard), score = 0}
 
-data RandomMove = RandomMove Float Position Tile
+data RandomMove = RandomMove Float [((Int,Int,Int),Tile)]
 	deriving (Show,Read,Eq)
 
 seedOpts :: Board -> [RandomMove]
-seedOpts board = two' ++ four'
+seedOpts board = two' ++ four' ++ twos ++ fours ++ twofour
 	where
 	two' :: [RandomMove]
-	two' = map (\x-> RandomMove (0.9*b1) x two) (blanks board)
+	two' = map (\x-> RandomMove (0.48*b1) [(x,two)]) (blanks board)
 	four' :: [RandomMove]
-	four' = map (\x -> RandomMove (0.1*b1) x four) (blanks board)
+	four' = map (\x -> RandomMove (0.16*b1) [(x,four)]) (blanks board)
+	twos :: [RandomMove]
+	twos = map (\(x,y) -> RandomMove (0.256*b2) [(x,two),(y,two)]) pickTwo
+	fours :: [RandomMove]
+	fours = map (\(x,y) -> RandomMove (0.016*b2) [(x,four),(y,four)]) pickTwo
+	twofour :: [RandomMove]
+	twofour = map (\(x,y) -> RandomMove (0.088*b2) [(x,two),(y,four)]) pickTwo
 	b1 :: Float
 	b1 = 1.0 / (fromIntegral $ length (blanks board))
+	b2 :: Float
+	b2 = let x=fromIntegral $ length (blanks board) in 1.0/(x*x-x)
+	pickTwo :: [((Int,Int,Int),(Int,Int,Int))]
+	pickTwo = [(xs,ys) | xs <- blanks board, ys <- blanks board, xs /= ys]
 
 applyRandomMove :: Board -> RandomMove -> Board
-applyRandomMove board (RandomMove _ p t) = setTile board p t
+applyRandomMove board (RandomMove _ xs) = setTiles board xs
 		--foldl helper board xs
 	--where
 	--helper :: Board -> ((Int,Int,Int),Tile) -> Board
 	--helper board (ps,t) = setTile board ps t
 
 seed :: Board -> IO Board
-seed board | blanks board /= [] = do
+seed board = do
+	board' <- addRandom board
+	r <- randomRIO (0.0,1.0) :: IO Float
+	if (r < 0.4) then (addRandom board') else (return board')
+	where
+	addRandom :: Board -> IO Board
+	addRandom board | blanks board /= [] = do
 		ps <- choice $ blanks board
 		r <- randomRIO (0.0,1.0) :: IO Float
 		return $ setTile board ps (if (r < 0.8) then two else four)
-	| otherwise = return board
+		| otherwise = return board
+	--addRandom board = fmap (\x -> setTile board x two) $ choice (blanks board)
 
 choice :: [a] -> IO a
 choice xs = fmap (xs !!) $ randomRIO (0, (length xs) - 1)
@@ -160,33 +173,33 @@ isValidMove board move = (makeMoveNoSeed board move) /= board
 
 moveList :: Board -> [Move]
 moveList board | any (\x-> (val x) == 2048) (map (getTile board) enumBoard) = []
-	| otherwise = filter (isValidMove board) [Up,Down,Lft,Rght]
+	| otherwise = filter (isValidMove board) [Up,Down,Lft,Rght,Bottom,Top]
 
 moveList' :: Board -> [(Board,Move)]
 moveList' board | any ((==2048) . val) $ map (getTile board) enumBoard = []
-	| otherwise = filter (\(x,_) -> x /= board) $ map (\x -> (makeMoveNoSeed board x,x)) [Up,Down,Lft,Rght]
+	| otherwise = filter (\(x,y) -> x /= board) $ map (\x -> (makeMoveNoSeed board x,x)) [Up,Down,Lft,Rght,Bottom,Top]
 
 makeMoveNoSeed :: Board -> Move -> Board
 makeMoveNoSeed board move = resetBoard $ foldl helper board (moveEnum move)
 	where
-	helper :: Board -> Position -> Board
+	helper :: Board -> (Int,Int,Int) -> Board
 	helper board ps
 		| getTile board ps == blank = board
 		| (position board ps) /= ps && val (next board ps) == val (getTile board ps) && 
 			not (merged (next board ps)) && (getTile board ps) /= blank = 
 			let t=Tile {val = (*2) $ val $ next board ps, merged=True } in 
-				incScoreAndSetTiles board ((*2) . val $ getTile board ps) [(position board ps,t),(ps,blank)]  
+				incScoreAndSetTiles board (val $ getTile board ps) [(position board ps,t),(ps,blank)]  
 				--setTile (setTile board (position board ps) t) ps blank
 		| otherwise = moveTile board ps $ position board ps
-	farthestPosition :: Int -> Position -> Board -> Move -> Position
+	farthestPosition :: Int -> (Int,Int,Int) -> Board -> Move -> (Int,Int,Int)
 	farthestPosition v ps board move = case fmap (getTile board) $ apply ps move of
 		Nothing -> ps
 		Just (Tile 0 _) -> farthestPosition v (fromJust $ apply ps move) board move
 		Just (Tile v' False) -> if v' == v then farthestPosition v (fromJust $ apply ps move) board move else ps
 		Just _ -> ps
-	position :: Board -> Position -> Position
+	position :: Board -> (Int,Int,Int) -> (Int,Int,Int)
 	position board ps = farthestPosition (val $ getTile board ps) ps board move
-	next :: Board -> Position -> Tile
+	next :: Board -> (Int,Int,Int) -> Tile
 	next board = (getTile board) . (position board)
 	fromJust :: Maybe a -> a
 	fromJust (Just x) = x
@@ -206,7 +219,7 @@ type Algorithm = Board -> Heuristic -> Int -> IO Move
 minimax :: Board -> Int -> Bool -> Heuristic -> Float
 minimax board depth _ h | depth == 0 || gameOver board = h board
 minimax board depth True h = maximum . ([-1.0/0.0]++) $ map (\(x,_) -> minimax x (depth-1) False h) (moveList' board)
-minimax board depth False h = sum $ map (\r@(RandomMove x _ _) -> (*x) $ minimax (applyRandomMove board r) (depth-1) True h) (seedOpts board) 
+minimax board depth False h = sum $ map (\r@(RandomMove x _) -> (*x) $ minimax (applyRandomMove board r) (depth-1) True h) (seedOpts board) 
 
 alphaBeta :: Board -> Int -> Bool -> Float -> Float -> Heuristic -> Float
 alphaBeta board depth _ _ _ h | depth == 0 || gameOver board = h board
@@ -222,38 +235,11 @@ alphaBeta board depth False a b h = helper b $ map (\(x,_) -> x) (moveList' boar
 	helper b' (x:xs) = let y = alphaBeta x (depth-1) True a b' h in if b' <= a then a else helper (min b' y) xs
 
 h1 :: Heuristic
-h1 board = (fromIntegral $ score board) - (fromIntegral . length $ blanks board)
+h1 = fromIntegral . score
 
 -- Source of significant slowdowns
 h2 :: Heuristic
-h2 board = (fromIntegral . score $ board) + (log . fromIntegral . length $ moveList board)
-
-weightHeuristic :: [(Heuristic,Float)] -> Heuristic
-weightHeuristic xs board = sum $ map (\(h,w) -> (*w) . h $ board) xs
-
-monotonicity :: Heuristic
-monotonicity board =  safeLog . sum $ map (helper . (map (val . (getTile board)))) rowsAndCols 
-	where
-	helper :: [Int] -> Float
-	helper = fromIntegral . length . maximumBy (comparing length) . filter isSorted . subsequences
-	isSorted :: [Int] -> Bool
-	isSorted [] = True
-	isSorted (0:_) = False	-- no zeros!
-	isSorted [x] = True
-	isSorted (x1:xs) = (x1 < head xs) && isSorted xs
-
-monotonicity2 :: Heuristic
-monotonicity2 board = sum $ map (helper (0.0,0.0) . (map (val . (getTile board)))) rowsAndCols
-	where
-	helper :: (Float,Float) -> [Int] -> Float
-	helper (a,b) [] = max a b
-	helper (a,b) [_] = max a b
-	helper (a,b) (x1:x2:xs) = let cur = (safeLog . fromIntegral $ x1) in
-		let nxt = (safeLog . fromIntegral $ x2) in
-		if cur>nxt then helper (a+cur-nxt,b) (x2:xs) else helper (a,b+nxt-cur) (x2:xs)
-
-h3 :: Heuristic
-h3 = weightHeuristic [(monotonicity2,0.3),(h2,1.2)]
+h2 board = fromIntegral $ (score board) + (length $ moveList board)
 
 minimaxPlayer :: Int -> Heuristic -> Player
 minimaxPlayer n h = Player { getMove = \board -> do {return $ argmax (\x -> minimax (makeMoveNoSeed board x) n True h) (moveList board) } }
@@ -266,16 +252,15 @@ runGame :: Player -> IO ()
 runGame player = seed newBoard >>= step player
 	where
 	step :: Player -> Board -> IO ()
-	step player board | gameOver board = putStrLn $ show board
+	step player board | gameOver board = return ()
 	step player board | otherwise = do
 		move <- (getMove player) board
 		board' <- makeMove board move
-		putStrLn $ show move
 		putStrLn $ show board'
 		step player board'
 
 main :: IO ()
-main = runGame $ alphaBetaPlayer 12 h2
+main = runGame $ alphaBetaPlayer 10 h1
 
 
 
