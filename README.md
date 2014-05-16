@@ -5,7 +5,7 @@
 
 2048 Original:
 
-Full alpha-beta pruning with the expectiminimax algorithm, which can currently run until depth 20 with no real issues. Current work is focused on making good heuristics (and also efficient heuristics).
+Full alpha-beta pruning with the expectiminimax algorithm, which can currently run until depth 7 with no real issues. The issue is balancing between the expectiminimax algorithm (which can't have pruning) and the traditional minimax approach (which treats the probabilistic steps as an adversary). Right now it uses expectiminimax when the branching factor is suitably low. Current work is focused on making good heuristics (and also efficient heuristics).
 
 
 
