@@ -1,4 +1,4 @@
-module GameTrie (GameTree, Context, InnerState, GameState, IOGameState, initialState, checkEmpty, getChildren, getBoard, getOpen, onPoint, insertAll, down, softDown, up, liftGame, printContext) where
+module GameTrie (GameTree, Context, InnerState, GameState, IOGameState, initialState, checkEmpty, getChildren, getChildren', getBoard, getOpen, onPoint, insertAll, down, softDown, up, liftGame, printContext) where
 import Data.Tree
 import Data.Tree.Zipper
 import Control.Monad
@@ -10,6 +10,14 @@ type Context g = TreePos Full g
 type InnerState g = Maybe (Context g, Int)
 type GameState g r = State (InnerState g) r
 type IOGameState g r = StateT (InnerState g) IO r
+
+
+childNodes :: Context g -> [Context g]
+childNodes context = helper (firstChild context)
+	where
+	helper :: Maybe (Context g) -> [Context g]
+	helper Nothing = []
+	helper (Just context) = context : (helper $ next context)
 
 insertChild :: g -> Context g -> Context g
 insertChild board = fromJust . parent . (insert $ singleton board) . children
@@ -43,6 +51,15 @@ onPoint board =  fmap (maybe False $ (==board) . label . fst) get
 getChildren :: GameState g [g]
 getChildren = flip fmap get $ maybe [] ((map rootLabel) . subForest . tree . fst)
 
+--getChildren' :: GameState g [GameState g g]
+--getChildren' = flip fmap get $ maybe [] (\(context,n)-> fmap (flip (,) n) (helper context))
+--	where
+--	helper :: InnerState g -> [(InnerState g, g)]
+--	helper Nothing = []
+--	helper (Just (context,n)) = flip map (childNodes context) $ \context'-> (Just (context',n), label context')
+getChildren' :: GameState g [(InnerState g,g)]
+getChildren' = flip fmap get $ maybe [] (\(context,n) -> [(Just (context',n), label context')| context' <- childNodes context])
+
 tryInsert :: g -> GameState g ()
 tryInsert board = modify $ fmap (\(context,n) -> 
 	if n==0 then (context,n) else (fromJust . parent . (insert $ singleton board) . children $ context, n-1))
@@ -58,12 +75,6 @@ insertAll xs = modify $ fmap (\(context,n) ->
 	fromJust (Just x) = x
 
 softDown :: Eq g => g -> GameState g ()
---softDown board = modify $ fmap (\(context,n) -> (maybe context id $ helper context,n))
---softDown board = modify $ (=<<) (\(context,n) -> fmap (flip (,) n) (helper context))
---	where
---	helper context = findBoard (firstChild context)
---	findBoard Nothing = Nothing
---	findBoard (Just context) = if label context == board then (Just context) else findBoard (next context)
 softDown board = modify $ (=<<) (\(context,n) -> fmap (flip (,) n) (helper context))
 	where
 	helper context = findBoard 0 (subForest . tree $ context) >>= (flip childAt context)

@@ -75,15 +75,17 @@ checkMoveList board = do
 		else return $ map fst $ moveList' board
 	else getChildren
 
-checkMoveList' :: Game g m => g -> GameState g [GameState g g]
+checkMoveList' :: Game g m => g -> GameState g [(InnerState g,g)]
 checkMoveList' board = do
 	empty <- checkEmpty
 	p <- onPoint board
+	st <- get
 	if empty then do
 		if p then do
 			insertAll $ map fst $ moveList' board
-			return $ map (return . fst) $ moveList' board
-		else return $ map (return . fst) $ moveList' board
+			return $ [(st,board') | (board',_) <- moveList' board]
+		else do
+			return $ [(st,board') | (board',_) <- moveList' board]
 	else getChildren'
 
 checkSeedOpts :: Game g m => g -> GameState g [(g,Float)]
@@ -118,6 +120,8 @@ minimax' board depth _ h | depth == 0 || gameOver board = modify up >> (return $
 minimax' board depth True h = do
 	moves <- checkMoveList board
 	ans <- mapM (\x -> softDown x >> minimax' x (depth-1) False h) moves
+--	moves <- checkMoveList' board
+--	let ans = [runState (minimax' board' (depth-1) False h) st | (st,board') <- moves]
 	modify up
 	return $ maximum ans
 minimax' board depth False h = do
@@ -143,6 +147,16 @@ alphaBeta board depth False a b h
 	helper ((x,p):xs) t = helper xs $ (+t) . (*p) $ alphaBeta x (depth-1) True a b h
 	helper' b' [] = b'
 	helper' b' (x:xs) = let y = min b' $ alphaBeta x (depth-1) True a b' h in if y <= a then y else helper' y xs
+
+alphaBeta' :: Game g m => g -> Int -> Bool -> Float -> Float -> Heuristic g -> GameState g Float
+alphaBeta' board depth _ _ _ h | depth == 0 || gameOver board = modify up >> (return $ runH h board)
+alphaBeta' board depth True a b h = (fmap (sortBy (\x-> \y-> compare (runH h x) (runH h y))) $ checkMoveList board) >>= helper a
+	where
+	helper a' [] = return a'
+	helper a' (x:xs) = do
+		y <- fmap (max a') $ (softDown x >> alphaBeta' x (depth-1) False a' b h)
+		if b <= y then return y
+		else helper y xs
 
 minimaxPlayer :: Game g m => Int -> Heuristic g -> Player g m
 minimaxPlayer n h = MakePlayer $ \board -> do {return $ argmax (\x -> minimax (makeMoveNoSeed board x) n False h) (moveList board) }

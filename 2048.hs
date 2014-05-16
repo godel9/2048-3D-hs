@@ -180,7 +180,7 @@ h1 = Heuristic $ fromIntegral . score
 main :: IO ()
 main = do
 	setStdGen $ mkStdGen 1000
-	runGame $ minimaxPlayer' 100000 3 h1
+	runGame $ minimaxPlayer 3 h1
 
 
 
